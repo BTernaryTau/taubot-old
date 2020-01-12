@@ -1,7 +1,7 @@
 # This module defines logic for processing bot commands.
 import base64
 from typing import Union
-from accounting import Authorization, Account, AccountId, Server, parse_account_id
+from accounting import Authorization, Account, AccountId, Server, parse_account_id, RedditAccountId, DiscordAccountId
 from Crypto.PublicKey import ECC
 from Crypto.Signature import DSS
 from Crypto.Hash import SHA3_512
@@ -113,7 +113,7 @@ def process_admin_freeze(author: AccountId, message: str, server: Server):
     account = assert_is_account(account_name, server)
 
     server.set_frozen(author_account, account, True)
-    return 'Account `%s` was frozen successfully.' % account_name
+    return 'Account %s was frozen successfully.' % account_name
 
 def process_admin_unfreeze(author: AccountId, message: str, server: Server):
     """Processes a message that unfreezes an account."""
@@ -122,7 +122,7 @@ def process_admin_unfreeze(author: AccountId, message: str, server: Server):
     account = assert_is_account(account_name, server)
 
     server.set_frozen(author_account, account, False)
-    return 'Account `%s` was unfrozen successfully.' % account_name
+    return 'Account %s was unfrozen successfully.' % account_name
 
 def process_balance(author: AccountId, message: str, server: Server):
     """Processes a message requesting the balance on an account."""
@@ -153,18 +153,21 @@ def assert_is_account(account_name: Union[str, AccountId], server: Server) -> Ac
 
     if not server.has_account(account_name):
         raise CommandException(
-            ('Sorry, I can\'t process your request because `%s` does not have an account yet. '
-             'Accounts can be opened using the `open` command.') % account_name)
+            ('Sorry, I can\'t process your request because %s does not have an account yet. '
+             'Accounts can be opened using the `open` command.') % account_name.readable())
 
     return server.get_account(account_name)
 
 def assert_authorized(account_name: Union[str, AccountId], server: Server, auth_level: Authorization) -> Account:
     """Asserts that a particular account exists and has an authorization level that is at least `auth_level`.
        Returns the account."""
+    if isinstance(account_name, str):
+        account_name = parse_account_id(account_name)
+
     account = assert_is_account(account_name, server)
 
     if account.get_authorization().value < auth_level.value:
-        raise CommandException('Sorry, I can\'t process your request because `%s` does not have the required authorization.' % account_name)
+        raise CommandException('Sorry, I can\'t process your request because %s does not have the required authorization.' % account_name.readable())
 
     return account
 
@@ -396,9 +399,17 @@ def process_request_alias(author: AccountId, message: str, server: Server):
 
     # At this point we will allow the private key to be forgotten.
 
-    return ('Your alias request code for account {0} can be found below. '
-        'Make {0} an alias for this account ({2}) using the `add-alias` command.\n\n```\n{1}\n```').format(
-            str(alias_id), signature, author.readable())
+    # Compose a helpful message for as to how the bot can be contacted to link accounts.
+    if isinstance(alias_id, RedditAccountId):
+        contact_message = 'Send me that exact command as a Reddit Private Message (not a direct chat) from %s.' % alias_id.readable()
+    elif isinstance(alias_id, DiscordAccountId):
+        contact_message = 'Send me that exact command prefixed with a mention of my name via Discord from account %s.' % alias_id
+    else:
+        contact_message = ''
+
+    return ('I created an alias request code for you. '
+        'Make {0} an alias for this account ({2}) by sending me the following message from {3}.\n\n```\nadd-alias {4} {1}\n```\n\n{5}').format(
+            str(alias_id), signature, author.readable(), alias_id.readable(), str(author), contact_message)
 
 def process_add_alias(author: AccountId, message: str, server: Server):
     """Processes a request to add `author` as an alias to an account."""
@@ -415,7 +426,7 @@ def process_add_alias(author: AccountId, message: str, server: Server):
 
     if is_signed_by(aliased_account, str(author), signature):
         server.add_account_alias(aliased_account, author)
-        return 'Alias set up sucessfully. %s and %s now refer to the same account.' % (
+        return 'Alias set up successfully. %s and %s now refer to the same account.' % (
             aliased_account_name, author.readable())
     else:
         raise CommandException('Cannot set up alias because the signature is invalid.')
