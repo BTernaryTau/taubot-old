@@ -108,13 +108,14 @@ if __name__ == '__main__':
             '<@%s>' % discord_client.user.id,
             '<@!%s>' % discord_client.user.id)
 
-        if content.startswith(prefixes):
+        if content.startswith(prefixes): # Checking all messages that start with the prefix.
             response = '<@%s> %s' % (
                 message.author.id,
                 process_command(
                     DiscordAccountId(str(message.author.id)),
                     content[content.index('>') + 1:].lstrip(),
-                    server))
+                    server,
+                    prefixes[0] + ' '))
 
             chunks = split_into_chunks(response.encode('utf-8'), 2000)
             for chunk in chunks:
