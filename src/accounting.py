@@ -283,6 +283,10 @@ class InMemoryServer(Server):
     def has_account(self, id):
         """Tests if an account with a particular ID exists on this server."""
         return id in self.accounts
+    
+    def delete_account(self, id):
+        """Deletes the account that matches an ID. Raises an exception if there is no such account."""
+        del self.accounts[id]
 
     def get_government_account(self):
         """Gets the main government account for this server."""
@@ -561,6 +565,8 @@ class LedgerServer(InMemoryServer):
             cmd = elems[0]
             if cmd == 'open':
                 super().open_account(elems[1], elems[2])
+            elif cmd == 'delete':
+                super().delete_account(elems[1])
             elif cmd == 'transfer':
                 super().transfer(
                     self.get_account_from_string(elems[1]),
@@ -625,6 +631,11 @@ class LedgerServer(InMemoryServer):
         account = super().open_account(id, account_uuid)
         self._ledger_write('open', id, account.get_uuid())
         return account
+    
+    def delete_account(self, id):
+        """Deletes the account that matches an ID. Raises an exception if there is no such account."""
+        super().delete_account(id)
+        self._ledger_write('delete', id)
 
     def add_account_alias(self, account: Account, alias_id: AccountId):
         """Associates an additional ID with an account."""
